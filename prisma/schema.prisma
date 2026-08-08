@@ -1,0 +1,515 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// ENUMS
+// ======================================================
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPING
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  VNPAY
+  MOMO
+  STRIPE
+  MOCK
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+// ======================================================
+// 1. USER
+// ======================================================
+
+model User {
+  id       BigInt @id @default(autoincrement())
+  username String @unique @db.VarChar(100)
+  email    String @unique @db.VarChar(150)
+  password String @db.VarChar(255)
+
+  fullName String  @db.VarChar(150)
+  phone    String? @db.VarChar(20)
+  avatar   String? @db.VarChar(500)
+
+  role   Role       @default(CUSTOMER)
+  status UserStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart         Cart?
+  orders       Order[]
+  reviews      Review[]
+  couponUsages CouponUsage[]
+  builds       PcBuild[]
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+// ======================================================
+// 2. CATEGORY
+// ======================================================
+
+model Category {
+  id BigInt @id @default(autoincrement())
+
+  name        String  @db.VarChar(150)
+  slug        String  @unique @db.VarChar(200)
+  description String? @db.Text
+
+  parentId BigInt?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+
+  products       Product[]
+  categoryBrands CategoryBrand[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+// ======================================================
+// 3. BRAND
+// ======================================================
+
+model Brand {
+  id BigInt @id @default(autoincrement())
+
+  name        String  @unique @db.VarChar(150)
+  slug        String  @unique @db.VarChar(200)
+  description String? @db.Text
+  logo        String? @db.VarChar(500)
+
+  products       Product[]
+  categoryBrands CategoryBrand[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brands")
+}
+
+// ======================================================
+// 3b. CATEGORY_BRAND (JOIN TABLE)
+// ======================================================
+
+model CategoryBrand {
+  categoryId BigInt
+  brandId    BigInt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  brand    Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, brandId])
+  @@index([categoryId])
+  @@index([brandId])
+  @@map("category_brands")
+}
+
+
+// ======================================================
+// 4. PRODUCT
+// ======================================================
+
+model Product {
+  id BigInt @id @default(autoincrement())
+
+  name String @db.VarChar(250)
+  slug String @unique @db.VarChar(300)
+  sku  String @unique @db.VarChar(100)
+
+  shortDescription String? @db.VarChar(500)
+  description      String? @db.Text
+
+  // Giá
+  price         Int
+  originalPrice Int?
+
+  // Kho
+  stock Int @default(0)
+
+  // Hình ảnh
+  image  String? @db.VarChar(500)
+  images Json?
+
+  // Thông số kỹ thuật
+  specifications Json?
+
+  warranty Int?
+
+  status ProductStatus @default(ACTIVE)
+
+  isFeatured Boolean @default(false)
+  viewCount  Int     @default(0)
+
+  categoryId BigInt
+  brandId    BigInt
+
+  category Category @relation(fields: [categoryId], references: [id])
+  brand    Brand    @relation(fields: [brandId], references: [id])
+
+  // Relations
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  reviews      Review[]
+  pcBuildItems PcBuildItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([status])
+  @@index([price])
+  @@map("products")
+}
+
+// ======================================================
+// 5. CART
+// ======================================================
+
+model Cart {
+  id BigInt @id @default(autoincrement())
+
+  userId BigInt @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("carts")
+}
+
+// ======================================================
+// 6. CART ITEM
+// ======================================================
+
+model CartItem {
+  id BigInt @id @default(autoincrement())
+
+  cartId    BigInt
+  productId BigInt
+
+  quantity Int @default(1)
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Một sản phẩm chỉ xuất hiện 1 lần trong cùng cart
+  @@unique([cartId, productId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+// ======================================================
+// 7. ORDER
+// ======================================================
+
+model Order {
+  id BigInt @id @default(autoincrement())
+
+  code String @unique @db.VarChar(30)
+
+  userId BigInt?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Thông tin người nhận
+  customerName    String @db.VarChar(150)
+  customerPhone   String @db.VarChar(20)
+  shippingAddress String @db.VarChar(500)
+
+  // Giá
+  subtotal       Int
+  shippingFee    Int @default(0)
+  discountAmount Int @default(0)
+  totalAmount    Int
+
+  // Trạng thái
+  status OrderStatus @default(PENDING)
+
+  // Thanh toán
+  paymentMethod PaymentMethod @default(COD)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  notes String? @db.Text
+
+  // Coupon nếu có
+  couponCode String? @db.VarChar(50)
+
+  // Relations
+  items   OrderItem[]
+  payment Payment?
+
+  couponUsages CouponUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// ======================================================
+// 8. ORDER ITEM
+// ======================================================
+
+model OrderItem {
+  id BigInt @id @default(autoincrement())
+
+  orderId   BigInt
+  productId BigInt
+
+  quantity Int
+  price    Int
+
+  // Snapshot thông tin sản phẩm tại thời điểm mua
+  productName String  @db.VarChar(250)
+  productSku  String? @db.VarChar(100)
+
+  // Snapshot specifications
+  specifications Json?
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ======================================================
+// 9. PAYMENT
+// ======================================================
+
+model Payment {
+  id BigInt @id @default(autoincrement())
+
+  orderId BigInt @unique
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  method PaymentMethod
+  amount Int
+
+  status PaymentStatus @default(PENDING)
+
+  // Mã giao dịch từ VNPay / Momo / Stripe
+  transactionCode String? @db.VarChar(255)
+
+  // URL thanh toán nếu có
+  paymentUrl String? @db.VarChar(1000)
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([transactionCode])
+  @@index([status])
+  @@map("payments")
+}
+
+// ======================================================
+// 10. REVIEW
+// ======================================================
+
+model Review {
+  id BigInt @id @default(autoincrement())
+
+  userId    BigInt
+  productId BigInt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  rating  Int
+  title   String? @db.VarChar(255)
+  comment String? @db.Text
+
+  status ReviewStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Một user chỉ review một sản phẩm một lần
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([userId])
+  @@index([rating])
+  @@map("reviews")
+}
+
+// ======================================================
+// 11. COUPON
+// ======================================================
+
+model Coupon {
+  id BigInt @id @default(autoincrement())
+
+  code String @unique @db.VarChar(50)
+
+  type CouponType
+
+  // PERCENT: 10 = 10%
+  // FIXED: 50000 = giảm 50.000
+  value Int
+
+  // Chỉ dùng cho PERCENT
+  maxDiscount Int?
+
+  // Giá trị đơn hàng tối thiểu
+  minOrderValue Int?
+
+  // Số lần sử dụng tối đa
+  usageLimit Int?
+
+  // Số lần đã sử dụng
+  usedCount Int @default(0)
+
+  startAt DateTime
+  endAt   DateTime
+
+  isActive Boolean @default(true)
+
+  usages CouponUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@index([startAt, endAt])
+  @@map("coupons")
+}
+
+// ======================================================
+// 12. COUPON USAGE
+// ======================================================
+
+model CouponUsage {
+  id BigInt @id @default(autoincrement())
+
+  couponId BigInt
+  userId   BigInt
+  orderId  BigInt
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  usedAt DateTime @default(now())
+
+  @@unique([couponId, userId, orderId])
+  @@index([couponId])
+  @@index([userId])
+  @@index([orderId])
+  @@map("coupon_usages")
+}
+
+// ======================================================
+// 13. PC BUILD
+// ======================================================
+
+model PcBuild {
+  id BigInt @id @default(autoincrement())
+
+  userId BigInt?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String @db.VarChar(150)
+
+  items PcBuildItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("pc_builds")
+}
+
+// ======================================================
+// 14. PC BUILD ITEM
+// ======================================================
+
+model PcBuildItem {
+  id BigInt @id @default(autoincrement())
+
+  buildId   BigInt
+  productId BigInt
+
+  // CPU, GPU, RAM, MAINBOARD, PSU, CASE, STORAGE...
+  componentType String @db.VarChar(50)
+
+  build   PcBuild @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([buildId, productId])
+  @@index([buildId])
+  @@index([productId])
+  @@map("pc_build_items")
+}
