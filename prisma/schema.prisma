@@ -30,7 +30,9 @@ enum ProductStatus {
 enum OrderStatus {
   PENDING
   CONFIRMED
+  PROCESSING
   SHIPPING
+  SHIPPED
   DELIVERED
   CANCELLED
 }
@@ -46,6 +48,7 @@ enum PaymentMethod {
 enum PaymentStatus {
   PENDING
   PAID
+  SUCCESS
   FAILED
   REFUNDED
 }
@@ -82,11 +85,12 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  cart         Cart?
-  orders       Order[]
-  reviews      Review[]
-  couponUsages CouponUsage[]
-  builds       PcBuild[]
+  cart                 Cart?
+  orders               Order[]
+  reviews              Review[]
+  couponUsages         CouponUsage[]
+  builds               PcBuild[]
+  orderStatusHistories OrderStatusHistory[]
 
   @@index([role])
   @@index([status])
@@ -195,9 +199,11 @@ model Product {
 
   categoryId BigInt
   brandId    BigInt
+  supplierId BigInt?
 
-  category Category @relation(fields: [categoryId], references: [id])
-  brand    Brand    @relation(fields: [brandId], references: [id])
+  category Category  @relation(fields: [categoryId], references: [id])
+  brand    Brand     @relation(fields: [brandId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   // Relations
   cartItems    CartItem[]
@@ -211,6 +217,7 @@ model Product {
   @@index([name])
   @@index([categoryId])
   @@index([brandId])
+  @@index([supplierId])
   @@index([status])
   @@index([price])
   @@map("products")
@@ -296,8 +303,10 @@ model Order {
   couponCode String? @db.VarChar(50)
 
   // Relations
-  items   OrderItem[]
-  payment Payment?
+  items           OrderItem[]
+  payment         Payment?
+  shippingOrder   ShippingOrder?
+  statusHistories OrderStatusHistory[]
 
   couponUsages CouponUsage[]
 
@@ -335,6 +344,7 @@ model OrderItem {
   product Product @relation(fields: [productId], references: [id])
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([orderId])
   @@index([productId])
@@ -352,8 +362,9 @@ model Payment {
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  method PaymentMethod
-  amount Int
+  method          PaymentMethod?
+  paymentMethodId BigInt?
+  amount          Int
 
   status PaymentStatus @default(PENDING)
 
@@ -371,6 +382,90 @@ model Payment {
   @@index([transactionCode])
   @@index([status])
   @@map("payments")
+}
+
+// ======================================================
+// 15. SUPPLIER
+// ======================================================
+
+model Supplier {
+  id          BigInt     @id @default(autoincrement())
+  name        String     @db.VarChar(150)
+  slug        String     @unique @db.VarChar(200)
+  description String?    @db.Text
+  status      UserStatus @default(ACTIVE)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("suppliers")
+}
+
+// ======================================================
+// 16. SHIPPING PROVIDER
+// ======================================================
+
+model ShippingProvider {
+  id     BigInt     @id @default(autoincrement())
+  name   String     @db.VarChar(150)
+  code   String     @unique @db.VarChar(50)
+  apiKey String?    @db.VarChar(255)
+  status UserStatus @default(ACTIVE)
+
+  shippingOrders ShippingOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shipping_providers")
+}
+
+// ======================================================
+// 17. SHIPPING ORDER
+// ======================================================
+
+model ShippingOrder {
+  id                    BigInt    @id @default(autoincrement())
+  orderId               BigInt    @unique
+  providerId            BigInt
+  trackingNumber        String?   @db.VarChar(100)
+  shippingCost          Int       @default(0)
+  estimatedDeliveryDate DateTime?
+  actualDeliveryDate    DateTime?
+  status                String    @db.VarChar(50)
+
+  order    Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider ShippingProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([providerId])
+  @@map("shipping_orders")
+}
+
+// ======================================================
+// 18. ORDER STATUS HISTORY
+// ======================================================
+
+model OrderStatusHistory {
+  id          BigInt      @id @default(autoincrement())
+  orderId     BigInt
+  status      OrderStatus
+  notes       String?     @db.Text
+  changedById BigInt?
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User? @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([changedById])
+  @@map("order_status_histories")
 }
 
 // ======================================================

@@ -792,3 +792,303 @@ Delete a category. Subcategories will be unlinked (set `parentId` to null).
   ```json
   { "message": "Cannot delete category because it contains products. Reassign or delete products first." }
   ```
+
+---
+
+## 5. Order Endpoints (`/api/orders`)
+
+### 5.1 Create Order
+Create a new purchase order. Supports both logged-in users and guests. If `items` is not provided in request body, items will be automatically pulled from the authenticated user's cart.
+
+- **URL**: `/api/orders`
+- **Method**: `POST`
+- **Access**: Public / Optional Auth (`Bearer <token>`)
+- **Headers**: `Content-Type: application/json`
+
+#### Request Body (Direct Items):
+```json
+{
+  "customerName": "John Doe",
+  "customerPhone": "0987654321",
+  "shippingAddress": "123 Nguyen Hue, Quan 1, TP.HCM",
+  "paymentMethod": "COD",
+  "notes": "Giao hang trong gio hanh chinh",
+  "couponCode": "DISCOUNT10",
+  "shippingFee": 30000,
+  "items": [
+    {
+      "productId": "1",
+      "quantity": 1
+    }
+  ]
+}
+```
+
+#### Request Body (From User Cart - Bearer Token Required):
+```json
+{
+  "customerName": "John Doe",
+  "customerPhone": "0987654321",
+  "shippingAddress": "123 Nguyen Hue, Quan 1, TP.HCM",
+  "paymentMethod": "COD",
+  "shippingFee": 30000
+}
+```
+
+#### Response (`201 Created`):
+```json
+{
+  "message": "Order placed successfully",
+  "order": {
+    "id": "1",
+    "code": "ORD-1723123456789-1234",
+    "userId": "1",
+    "customerName": "John Doe",
+    "customerPhone": "0987654321",
+    "shippingAddress": "123 Nguyen Hue, Quan 1, TP.HCM",
+    "subtotal": 18990000,
+    "shippingFee": 30000,
+    "discountAmount": 1000000,
+    "totalAmount": 18020000,
+    "status": "PENDING",
+    "paymentMethod": "COD",
+    "paymentStatus": "PENDING",
+    "notes": "Giao hang trong gio hanh chinh",
+    "couponCode": "DISCOUNT10",
+    "items": [
+      {
+        "id": "1",
+        "orderId": "1",
+        "productId": "1",
+        "quantity": 1,
+        "price": 18990000,
+        "productName": "Laptop MSI Katana 15",
+        "productSku": "MSI-KATANA-15",
+        "specifications": null,
+        "image": "https://example.com/image.jpg",
+        "createdAt": "2026-08-08T15:00:00.000Z",
+        "updatedAt": "2026-08-08T15:00:00.000Z"
+      }
+    ],
+    "payment": {
+      "id": "1",
+      "orderId": "1",
+      "method": "COD",
+      "paymentMethodId": null,
+      "amount": 18020000,
+      "status": "PENDING",
+      "transactionCode": null,
+      "paymentUrl": null,
+      "paidAt": null,
+      "createdAt": "2026-08-08T15:00:00.000Z",
+      "updatedAt": "2026-08-08T15:00:00.000Z"
+    },
+    "statusHistories": [
+      {
+        "id": "1",
+        "orderId": "1",
+        "status": "PENDING",
+        "notes": "Order created successfully",
+        "changedById": "1",
+        "changedByName": "John Doe",
+        "createdAt": "2026-08-08T15:00:00.000Z"
+      }
+    ],
+    "createdAt": "2026-08-08T15:00:00.000Z",
+    "updatedAt": "2026-08-08T15:00:00.000Z"
+  }
+}
+```
+
+---
+
+### 5.2 Get My Orders
+Get order history of the current authenticated user.
+
+- **URL**: `/api/orders/my-orders`
+- **Method**: `GET`
+- **Access**: Protected (`Bearer <token>`)
+
+#### Query Parameters:
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `page` | number | `1` | Page number |
+| `limit` | number | `10` | Records per page |
+| `status` | string | `undefined` | Filter by `OrderStatus` (`PENDING`, `CONFIRMED`, `PROCESSING`, `SHIPPING`, `DELIVERED`, `CANCELLED`) |
+
+#### Response (`200 OK`):
+```json
+{
+  "orders": [
+    {
+      "id": "1",
+      "code": "ORD-1723123456789-1234",
+      "customerName": "John Doe",
+      "totalAmount": 18020000,
+      "status": "PENDING",
+      "paymentMethod": "COD",
+      "paymentStatus": "PENDING",
+      "createdAt": "2026-08-08T15:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+### 5.3 Get Order Detail
+Retrieve order details by ID or order Code. Guests can query by adding `?phone=<customerPhone>`.
+
+- **URL**: `/api/orders/:idOrCode`
+- **Method**: `GET`
+- **Access**: Public / Protected (`Bearer <token>` or matching `?phone=...` query)
+
+#### Example Request:
+`GET /api/orders/ORD-1723123456789-1234` OR `GET /api/orders/1`
+
+#### Response (`200 OK`):
+```json
+{
+  "order": {
+    "id": "1",
+    "code": "ORD-1723123456789-1234",
+    "customerName": "John Doe",
+    "customerPhone": "0987654321",
+    "shippingAddress": "123 Nguyen Hue, Quan 1, TP.HCM",
+    "subtotal": 18990000,
+    "shippingFee": 30000,
+    "discountAmount": 1000000,
+    "totalAmount": 18020000,
+    "status": "PENDING",
+    "paymentMethod": "COD",
+    "paymentStatus": "PENDING",
+    "items": [...],
+    "payment": {...},
+    "statusHistories": [...]
+  }
+}
+```
+
+---
+
+### 5.4 Cancel Order
+Cancel an order (Customer can cancel if status is `PENDING` or `CONFIRMED`; Admin can cancel anytime). Stock is automatically restored to products.
+
+- **URL**: `/api/orders/:id/cancel`
+- **Method**: `PUT`
+- **Access**: Protected (`Bearer <token>`)
+
+#### Request Body (optional):
+```json
+{
+  "reason": "Doi y khong mua nua"
+}
+```
+
+#### Response (`200 OK`):
+```json
+{
+  "message": "Order cancelled successfully",
+  "order": {
+    "id": "1",
+    "code": "ORD-1723123456789-1234",
+    "status": "CANCELLED"
+  }
+}
+```
+
+---
+
+### 5.5 Get All Orders (Admin Only)
+Retrieve all orders with filters, search, and pagination.
+
+- **URL**: `/api/orders`
+- **Method**: `GET`
+- **Access**: Protected (`ADMIN` role required)
+
+#### Query Parameters:
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `page` | number | `1` | Page number |
+| `limit` | number | `10` | Records per page |
+| `status` | string | `undefined` | Filter by `OrderStatus` |
+| `paymentStatus` | string | `undefined` | Filter by `PaymentStatus` |
+| `search` | string | `undefined` | Search by `code`, `customerName`, `customerPhone` |
+
+#### Response (`200 OK`):
+```json
+{
+  "orders": [...],
+  "pagination": {
+    "total": 10,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+### 5.6 Update Order Status (Admin Only)
+Update the workflow status of an order. If status is updated to `CANCELLED`, product stock will be automatically restored.
+
+- **URL**: `/api/orders/:id/status`
+- **Method**: `PUT`
+- **Access**: Protected (`ADMIN` role required)
+
+#### Request Body:
+```json
+{
+  "status": "CONFIRMED", // PENDING, CONFIRMED, PROCESSING, SHIPPING, SHIPPED, DELIVERED, CANCELLED
+  "notes": "Da xac nhan don hang va chuyen sang bo phan kho"
+}
+```
+
+#### Response (`200 OK`):
+```json
+{
+  "message": "Order status updated to CONFIRMED",
+  "order": {
+    "id": "1",
+    "code": "ORD-1723123456789-1234",
+    "status": "CONFIRMED"
+  }
+}
+```
+
+---
+
+### 5.7 Update Payment Status (Admin Only)
+Update payment status of an order (e.g., mark as `PAID` or `REFUNDED`).
+
+- **URL**: `/api/orders/:id/payment-status`
+- **Method**: `PUT`
+- **Access**: Protected (`ADMIN` role required)
+
+#### Request Body:
+```json
+{
+  "paymentStatus": "PAID", // PENDING, PAID, SUCCESS, FAILED, REFUNDED
+  "transactionCode": "VNP12345678"
+}
+```
+
+#### Response (`200 OK`):
+```json
+{
+  "message": "Payment status updated to PAID",
+  "order": {
+    "id": "1",
+    "code": "ORD-1723123456789-1234",
+    "paymentStatus": "PAID"
+  }
+}
+```
+

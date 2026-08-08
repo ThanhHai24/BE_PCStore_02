@@ -30,3 +30,23 @@ export const authenticate = (
         });
     }
 };
+
+export const optionalAuthenticate = (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+) => {
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        try {
+            const decoded = verifyToken(token);
+            req.user = decoded;
+        } catch (error) {
+            // Token is invalid/expired, continue as guest
+        }
+    }
+
+    next();
+};
