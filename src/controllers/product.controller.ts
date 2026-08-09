@@ -37,11 +37,36 @@ export const getProducts = async (req: Request, res: Response) => {
         }
 
         if (categoryId) {
-            whereClause.categoryId = BigInt(categoryId);
+            const isCatNumeric = /^\d+$/.test(categoryId);
+            const category = await prisma.category.findFirst({
+                where: isCatNumeric
+                    ? { id: BigInt(categoryId) }
+                    : { slug: categoryId },
+                select: { id: true, children: { select: { id: true } } }
+            });
+
+            if (category) {
+                const categoryIds = [category.id, ...category.children.map((c) => c.id)];
+                whereClause.categoryId = { in: categoryIds };
+            } else {
+                whereClause.categoryId = -1n;
+            }
         }
 
         if (brandId) {
-            whereClause.brandId = BigInt(brandId);
+            const isBrandNumeric = /^\d+$/.test(brandId);
+            const brand = await prisma.brand.findFirst({
+                where: isBrandNumeric
+                    ? { id: BigInt(brandId) }
+                    : { slug: brandId },
+                select: { id: true }
+            });
+
+            if (brand) {
+                whereClause.brandId = brand.id;
+            } else {
+                whereClause.brandId = -1n;
+            }
         }
 
         if (minPrice !== undefined || maxPrice !== undefined) {
