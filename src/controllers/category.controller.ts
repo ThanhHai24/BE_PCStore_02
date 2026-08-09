@@ -29,7 +29,14 @@ export const getCategories = async (req: Request, res: Response) => {
 
         const whereClause: any = {};
         if (parentIdQuery !== undefined) {
-            whereClause.parentId = parentIdQuery === "null" ? null : BigInt(parentIdQuery);
+            if (parentIdQuery === "null") {
+                whereClause.parentId = null;
+            } else if (/^\d+$/.test(parentIdQuery)) {
+                whereClause.parentId = BigInt(parentIdQuery);
+            } else {
+                const parentCat = await prisma.category.findUnique({ where: { slug: parentIdQuery } });
+                whereClause.parentId = parentCat ? parentCat.id : -1n;
+            }
         }
 
         const categories = await prisma.category.findMany({
