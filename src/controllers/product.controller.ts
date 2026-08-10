@@ -200,6 +200,7 @@ export const createProduct = async (req: Request, res: Response) => {
             description,
             price,
             originalPrice,
+            importPrice,
             stock,
             image,
             images,
@@ -211,9 +212,17 @@ export const createProduct = async (req: Request, res: Response) => {
             brandId
         } = req.body;
 
-        if (!name || !sku || price === undefined || !categoryId || !brandId) {
+        // Validate required fields
+        const missingFields: string[] = [];
+        if (!name) missingFields.push("name (tên sản phẩm)");
+        if (!sku) missingFields.push("sku (mã sản phẩm)");
+        if (price === undefined || price === null) missingFields.push("price (giá bán)");
+        if (!categoryId) missingFields.push("categoryId (danh mục)");
+        if (!brandId) missingFields.push("brandId (thương hiệu)");
+
+        if (missingFields.length > 0) {
             return res.status(400).json({
-                message: "Missing required fields: name, sku, price, categoryId, and brandId are required"
+                message: `Thiếu thông tin bắt buộc: ${missingFields.join(", ")}`
             });
         }
 
@@ -221,14 +230,14 @@ export const createProduct = async (req: Request, res: Response) => {
             where: { id: BigInt(categoryId) }
         });
         if (!category) {
-            return res.status(400).json({ message: "Category not found" });
+            return res.status(400).json({ message: "Danh mục không tồn tại" });
         }
 
         const brand = await prisma.brand.findUnique({
             where: { id: BigInt(brandId) }
         });
         if (!brand) {
-            return res.status(400).json({ message: "Brand not found" });
+            return res.status(400).json({ message: "Thương hiệu không tồn tại" });
         }
 
         const finalSlug = slug ? slugify(slug) : slugify(name);
@@ -237,14 +246,23 @@ export const createProduct = async (req: Request, res: Response) => {
             where: { sku }
         });
         if (existingSku) {
-            return res.status(409).json({ message: "SKU already exists" });
+            return res.status(409).json({ message: `SKU "${sku}" đã tồn tại, vui lòng dùng mã khác` });
         }
 
         const existingSlug = await prisma.product.findUnique({
             where: { slug: finalSlug }
         });
         if (existingSlug) {
-            return res.status(409).json({ message: "Product slug already exists" });
+            return res.status(409).json({ message: `Tên sản phẩm "${name}" đã tồn tại, vui lòng đặt tên khác` });
+        }
+
+        // Merge importPrice vào specifications nếu có
+        let finalSpecifications = specifications || null;
+        if (importPrice !== undefined && importPrice !== null) {
+            finalSpecifications = {
+                ...(typeof finalSpecifications === 'object' && finalSpecifications !== null ? finalSpecifications : {}),
+                importPrice: Number(importPrice)
+            };
         }
 
         const product = await prisma.product.create({
@@ -255,12 +273,12 @@ export const createProduct = async (req: Request, res: Response) => {
                 shortDescription: shortDescription || null,
                 description: description || null,
                 price: Number(price),
-                originalPrice: originalPrice !== undefined ? Number(originalPrice) : null,
+                originalPrice: originalPrice !== undefined && originalPrice !== null ? Number(originalPrice) : null,
                 stock: stock !== undefined ? Number(stock) : 0,
                 image: image || null,
-                images: images || null,
-                specifications: specifications || null,
-                warranty: warranty !== undefined ? Number(warranty) : null,
+                images: images && images.length > 0 ? images : null,
+                specifications: finalSpecifications,
+                warranty: warranty !== undefined && warranty !== null ? Number(warranty) : null,
                 status: status || "ACTIVE",
                 isFeatured: Boolean(isFeatured),
                 categoryId: BigInt(categoryId),
@@ -273,17 +291,18 @@ export const createProduct = async (req: Request, res: Response) => {
         });
 
         return res.status(201).json({
-            message: "Product created successfully",
+            message: "Tạo sản phẩm thành công",
             product: formatProductResponse(product)
         });
 
     } catch (error) {
         console.error("CreateProduct Error:", error);
         return res.status(500).json({
-            message: "Internal server error"
+            message: "Lỗi server nội bộ, vui lòng thử lại"
         });
     }
 };
+
 
 export const updateProduct = async (req: Request, res: Response) => {
     try {
