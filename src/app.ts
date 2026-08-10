@@ -7,6 +7,7 @@ import categoryRoutes from "./routes/category.routes";
 import orderRoutes from "./routes/order.routes";
 import uploadRoutes from "./routes/upload.routes";
 import paymentRoutes from "./routes/payment.routes";
+import brandRoutes from "./routes/brand.routes";
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/brands", brandRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payment", paymentRoutes);
