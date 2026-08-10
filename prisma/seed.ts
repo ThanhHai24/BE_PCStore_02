@@ -41,6 +41,11 @@ async function main() {
     console.log("\n7️⃣ Seeding Orders & Related Details...");
     await seedOrder();
 
+    // 9. Sync PostgreSQL Auto-Increment Sequences
+    console.log("\n8️⃣ Syncing Database Sequences...");
+    const { resetDatabaseSequences } = await import("../src/utils/fixSequences");
+    await resetDatabaseSequences();
+
     console.log("\n🎉 Full Seeding completed successfully!");
 }
 

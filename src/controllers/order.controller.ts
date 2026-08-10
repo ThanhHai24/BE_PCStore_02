@@ -48,7 +48,16 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         // Determine items source: direct payload vs user cart
         if (Array.isArray(reqItems) && reqItems.length > 0) {
             // Process items from request body
-            const productIds = reqItems.map((i: any) => BigInt(i.productId));
+            const productIds = reqItems
+                .map((i: any) => {
+                    try {
+                        return BigInt(i.productId);
+                    } catch {
+                        return null;
+                    }
+                })
+                .filter((id): id is bigint => id !== null);
+
             const products = await prisma.product.findMany({
                 where: { id: { in: productIds } }
             });
@@ -56,9 +65,14 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             const productMap = new Map(products.map(p => [p.id.toString(), p]));
 
             for (const item of reqItems) {
-                const pId = BigInt(item.productId);
+                let pId: bigint | null = null;
+                try {
+                    pId = BigInt(item.productId);
+                } catch {
+                    pId = null;
+                }
                 const quantity = Number(item.quantity);
-                const product = productMap.get(pId.toString());
+                const product = pId !== null ? productMap.get(pId.toString()) : null;
 
                 if (!product) {
                     return res.status(400).json({
