@@ -4,6 +4,7 @@ import authRoutes from "./routes/auth.routes";
 import productRoutes from "./routes/product.routes";
 import categoryRoutes from "./routes/category.routes";
 import orderRoutes from "./routes/order.routes";
+import paymentRoutes from "./routes/payment.routes";
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/payment", paymentRoutes);
 
 app.get("/", (req, res) => {
     res.json({
