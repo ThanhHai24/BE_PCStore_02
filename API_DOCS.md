@@ -1092,3 +1092,142 @@ Update payment status of an order (e.g., mark as `PAID` or `REFUNDED`).
 }
 ```
 
+---
+
+## 6. User Management Endpoints (`/api/users`)
+
+All endpoints under `/api/users` are **Protected** and require `ADMIN` role (`Authorization: Bearer <token>`).
+
+### 6.1 Get All Users
+Retrieve a paginated list of users with search, role, and status filtering, including total orders and accumulated spent amount.
+
+- **URL**: `/api/users`
+- **Method**: `GET`
+- **Access**: Protected (`ADMIN` role required)
+
+#### Query Parameters:
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `page` | number | `1` | Page number |
+| `limit` | number | `10` | Records per page |
+| `role` | string | `undefined` | Filter by role (`ADMIN`, `CUSTOMER`) |
+| `status` | string | `undefined` | Filter by status (`ACTIVE`, `INACTIVE`, `BANNED`) |
+| `search` | string | `undefined` | Search by `fullName`, `email`, `username`, `phone` |
+
+#### Response (`200 OK`):
+```json
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "johndoe",
+      "email": "john@example.com",
+      "fullName": "John Doe",
+      "phone": "0987654321",
+      "avatar": null,
+      "role": "CUSTOMER",
+      "status": "ACTIVE",
+      "ordersCount": 5,
+      "totalSpent": 125490000,
+      "createdAt": "2026-08-08T14:30:00.000Z",
+      "updatedAt": "2026-08-08T14:30:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+### 6.2 Get User Detail
+Retrieve detailed profile of a specific user including recent orders and total spending.
+
+- **URL**: `/api/users/:id`
+- **Method**: `GET`
+- **Access**: Protected (`ADMIN` role required)
+
+#### Response (`200 OK`):
+```json
+{
+  "user": {
+    "id": "1",
+    "username": "johndoe",
+    "email": "john@example.com",
+    "fullName": "John Doe",
+    "phone": "0987654321",
+    "avatar": null,
+    "role": "CUSTOMER",
+    "status": "ACTIVE",
+    "ordersCount": 5,
+    "reviewsCount": 2,
+    "totalSpent": 125490000,
+    "recentOrders": [...]
+  }
+}
+```
+
+---
+
+### 6.3 Create User (Admin Action)
+Admin creates a new user or admin account directly.
+
+- **URL**: `/api/users`
+- **Method**: `POST`
+- **Access**: Protected (`ADMIN` role required)
+- **Headers**: `Content-Type: application/json`
+
+#### Request Body:
+```json
+{
+  "username": "admin_test",
+  "email": "admin@example.com",
+  "password": "password123",
+  "fullName": "Admin User",
+  "phone": "0912345678",
+  "role": "ADMIN",
+  "status": "ACTIVE"
+}
+```
+
+---
+
+### 6.4 Update User
+Update user details, change user role, or lock/unlock account status.
+
+- **URL**: `/api/users/:id`
+- **Method**: `PUT`
+- **Access**: Protected (`ADMIN` role required)
+- **Headers**: `Content-Type: application/json`
+
+#### Request Body:
+```json
+{
+  "fullName": "John Updated",
+  "phone": "0988777666",
+  "role": "CUSTOMER",
+  "status": "BANNED"
+}
+```
+
+---
+
+### 6.5 Delete User
+Permanently remove a user account.
+
+- **URL**: `/api/users/:id`
+- **Method**: `DELETE`
+- **Access**: Protected (`ADMIN` role required)
+
+#### Response (`200 OK`):
+```json
+{
+  "message": "User deleted successfully"
+}
+```
+
+
