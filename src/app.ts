@@ -8,6 +8,7 @@ import orderRoutes from "./routes/order.routes";
 import uploadRoutes from "./routes/upload.routes";
 import paymentRoutes from "./routes/payment.routes";
 import brandRoutes from "./routes/brand.routes";
+import userRoutes from "./routes/user.routes";
 
 const app = express();
 
@@ -22,6 +23,8 @@ app.use("/api/brands", brandRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/users", userRoutes);
+
 
 
 app.get("/", (req, res) => {

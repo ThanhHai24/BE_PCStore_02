@@ -418,7 +418,7 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
 
         const idParam = req.params.id;
         const id = Array.isArray(idParam) ? idParam[0] : idParam;
-        const { reason } = req.body;
+        const { reason } = req.body || {};
 
         if (!id) {
             return res.status(400).json({ message: "Order ID is required" });
@@ -565,46 +565,95 @@ export const getAllOrders = async (req: Request, res: Response) => {
 
 /**
  * Update order status (Admin only)
+ * Flow: PENDING → CONFIRMED → PROCESSING → SHIPPING → SHIPPED → DELIVERED | CANCELLED
+ * Admin can change status between any valid states.
  */
 export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
     try {
         const idParam = req.params.id;
         const id = Array.isArray(idParam) ? idParam[0] : idParam;
-        const { status, notes } = req.body;
+        const { status, notes } = req.body || {};
 
-        if (!status || !Object.values(OrderStatus).includes(status)) {
+        if (!status) {
+            return res.status(400).json({ message: "Status is required" });
+        }
+
+        const normalizedStatus = String(status).toUpperCase() as OrderStatus;
+        const validStatuses = Object.values(OrderStatus);
+        
+        if (!validStatuses.includes(normalizedStatus)) {
             return res.status(400).json({
-                message: `Invalid status. Allowed values: ${Object.values(OrderStatus).join(", ")}`
+                message: `Invalid status '${status}'. Allowed values: ${validStatuses.join(", ")}`
             });
         }
 
+        // Find order by numeric ID or code
         const isNumeric = /^\d+$/.test(id);
         const order = await prisma.order.findFirst({
             where: isNumeric ? { id: BigInt(id) } : { code: id },
-            include: { items: true }
+            include: { items: true, payment: true }
         });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found" });
         }
 
-        const adminId = req.user?.userId ? BigInt(req.user.userId) : null;
         const previousStatus = order.status;
+        const adminId = req.user?.userId ? BigInt(req.user.userId) : null;
+
+        // Verify adminId exists in database before using as foreign key
+        let validAdminId: bigint | null = null;
+        if (adminId) {
+            const adminUser = await prisma.user.findUnique({ where: { id: adminId } });
+            if (adminUser) {
+                validAdminId = adminId;
+            }
+        }
 
         const updatedOrder = await prisma.$transaction(async (tx) => {
-            // Update order status & log history
+            const updateData: any = {
+                status: normalizedStatus,
+                statusHistories: {
+                    create: {
+                        status: normalizedStatus,
+                        notes: notes || `Trạng thái được cập nhật bởi Admin (${previousStatus} → ${normalizedStatus})`,
+                        changedById: validAdminId
+                    }
+                }
+            };
+
+            // Auto-update paymentStatus to PAID when DELIVERED if currently PENDING
+            if (normalizedStatus === OrderStatus.DELIVERED && order.paymentStatus === PaymentStatus.PENDING) {
+                updateData.paymentStatus = PaymentStatus.PAID;
+                if (order.payment) {
+                    await tx.payment.update({
+                        where: { id: order.payment.id },
+                        data: {
+                            status: PaymentStatus.PAID,
+                            paidAt: new Date()
+                        }
+                    });
+                }
+            }
+
+            // Auto-update paymentStatus to FAILED when CANCELLED if currently PENDING
+            if (normalizedStatus === OrderStatus.CANCELLED && order.paymentStatus === PaymentStatus.PENDING) {
+                updateData.paymentStatus = PaymentStatus.FAILED;
+                if (order.payment) {
+                    await tx.payment.update({
+                        where: { id: order.payment.id },
+                        data: {
+                            status: PaymentStatus.FAILED
+                        }
+                    });
+                }
+            }
+
+
+            // 1. Update order
             const updated = await tx.order.update({
                 where: { id: order.id },
-                data: {
-                    status,
-                    statusHistories: {
-                        create: {
-                            status,
-                            notes: notes || `Status updated from ${previousStatus} to ${status}`,
-                            changedById: adminId
-                        }
-                    }
-                },
+                data: updateData,
                 include: {
                     items: { include: { product: true } },
                     payment: true,
@@ -613,8 +662,9 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
                 }
             });
 
-            // If changing to CANCELLED and was not previously CANCELLED, restore stock
-            if (status === OrderStatus.CANCELLED && previousStatus !== OrderStatus.CANCELLED) {
+            // 2. Stock handling:
+            // Changing TO CANCELLED from active status -> Restore product stock
+            if (normalizedStatus === OrderStatus.CANCELLED && (previousStatus as string) !== "CANCELLED") {
                 for (const item of order.items) {
                     await tx.product.update({
                         where: { id: item.productId },
@@ -623,11 +673,21 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
                 }
             }
 
+            // Changing FROM CANCELLED to active status -> Deduct product stock
+            if ((previousStatus as string) === "CANCELLED" && normalizedStatus !== OrderStatus.CANCELLED) {
+                for (const item of order.items) {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { decrement: item.quantity } }
+                    });
+                }
+            }
+
             return updated;
         });
 
         return res.json({
-            message: `Order status updated to ${status}`,
+            message: `Trạng thái đơn hàng đã cập nhật thành ${normalizedStatus}`,
             order: formatOrderResponse(updatedOrder)
         });
 
@@ -637,6 +697,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
     }
 };
 
+
 /**
  * Update payment status (Admin only)
  */
@@ -644,7 +705,7 @@ export const updatePaymentStatus = async (req: AuthRequest, res: Response) => {
     try {
         const idParam = req.params.id;
         const id = Array.isArray(idParam) ? idParam[0] : idParam;
-        const { paymentStatus, transactionCode } = req.body;
+        const { paymentStatus, transactionCode } = req.body || {};
 
         if (!paymentStatus || !Object.values(PaymentStatus).includes(paymentStatus)) {
             return res.status(400).json({

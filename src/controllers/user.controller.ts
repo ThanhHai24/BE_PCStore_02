@@ -137,7 +137,7 @@ export const getUserById = async (req: Request, res: Response) => {
 // Create User (Admin Action)
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const { username, email, password, fullName, phone, role, status } = req.body;
+        const { username, email, password, fullName, phone, role, status } = req.body || {};
 
         if (!username || !email || !password || !fullName) {
             return res.status(400).json({
@@ -206,7 +206,7 @@ export const updateUser = async (req: Request, res: Response) => {
         const idStr = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
         const userId = BigInt(idStr);
 
-        const { fullName, phone, avatar, role, status } = req.body;
+        const { fullName, phone, avatar, role, status } = req.body || {};
 
         const existingUser = await prisma.user.findUnique({
             where: { id: userId }

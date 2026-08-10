@@ -22,11 +22,12 @@ export const getProducts = async (req: Request, res: Response) => {
 
         const whereClause: any = {};
 
-        if (status) {
-            whereClause.status = status;
-        } else {
+        if (status && status.toUpperCase() !== "ALL") {
+            whereClause.status = status.toUpperCase();
+        } else if (!status) {
             whereClause.status = "ACTIVE";
         }
+
 
         if (search) {
             whereClause.OR = [
@@ -290,6 +291,25 @@ export const createProduct = async (req: Request, res: Response) => {
             }
         });
 
+        // Ensure category & brand link exists in category_brands
+        try {
+            await prisma.categoryBrand.upsert({
+                where: {
+                    categoryId_brandId: {
+                        categoryId: BigInt(categoryId),
+                        brandId: BigInt(brandId)
+                    }
+                },
+                create: {
+                    categoryId: BigInt(categoryId),
+                    brandId: BigInt(brandId)
+                },
+                update: {}
+            });
+        } catch (linkErr) {
+            console.warn("CategoryBrand upsert warning:", linkErr);
+        }
+
         return res.status(201).json({
             message: "Tạo sản phẩm thành công",
             product: formatProductResponse(product)
@@ -400,6 +420,25 @@ export const updateProduct = async (req: Request, res: Response) => {
                 brand: true
             }
         });
+
+        // Ensure category & brand link exists in category_brands
+        try {
+            await prisma.categoryBrand.upsert({
+                where: {
+                    categoryId_brandId: {
+                        categoryId: updatedProduct.categoryId,
+                        brandId: updatedProduct.brandId
+                    }
+                },
+                create: {
+                    categoryId: updatedProduct.categoryId,
+                    brandId: updatedProduct.brandId
+                },
+                update: {}
+            });
+        } catch (linkErr) {
+            console.warn("CategoryBrand upsert warning:", linkErr);
+        }
 
         return res.json({
             message: "Product updated successfully",

@@ -13,15 +13,17 @@ import { authorize } from "../middlewares/role.middleware";
 
 const router = Router();
 
-// Public / User routes
-router.post("/", optionalAuthenticate, createOrder);
-router.get("/my-orders", authenticate, getUserOrders);
-router.get("/:idOrCode", optionalAuthenticate, getOrderByIdOrCode);
-router.put("/:id/cancel", authenticate, cancelOrder);
-
-// Admin routes
+// ─── Admin routes (specific paths FIRST — must be before /:idOrCode wildcard) ─────
 router.get("/", authenticate, authorize("ADMIN"), getAllOrders);
 router.put("/:id/status", authenticate, authorize("ADMIN"), updateOrderStatus);
 router.put("/:id/payment-status", authenticate, authorize("ADMIN"), updatePaymentStatus);
+
+// ─── User routes ──────────────────────────────────────────────────────────────────
+router.post("/", optionalAuthenticate, createOrder);
+router.get("/my-orders", authenticate, getUserOrders);
+router.put("/:id/cancel", authenticate, cancelOrder);
+
+// ─── Wildcard route LAST ──────────────────────────────────────────────────────────
+router.get("/:idOrCode", optionalAuthenticate, getOrderByIdOrCode);
 
 export default router;

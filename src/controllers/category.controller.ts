@@ -7,16 +7,23 @@ export const getCategories = async (req: Request, res: Response) => {
     try {
         const isTree = req.query.tree === "true" || req.query.tree === "1";
         const parentIdQuery = req.query.parentId as string;
+        const search = req.query.search as string;
 
         if (isTree) {
             const rootCategories = await prisma.category.findMany({
                 where: { parentId: null },
                 orderBy: { name: "asc" },
                 include: {
+                    _count: { select: { products: true } },
                     children: {
                         orderBy: { name: "asc" },
                         include: {
-                            children: true
+                            _count: { select: { products: true } },
+                            children: {
+                                include: {
+                                    _count: { select: { products: true } }
+                                }
+                            }
                         }
                     }
                 }
@@ -28,8 +35,17 @@ export const getCategories = async (req: Request, res: Response) => {
         }
 
         const whereClause: any = {};
-        if (parentIdQuery !== undefined) {
-            if (parentIdQuery === "null") {
+
+        if (search) {
+            whereClause.OR = [
+                { name: { contains: search, mode: "insensitive" } },
+                { slug: { contains: search, mode: "insensitive" } },
+                { description: { contains: search, mode: "insensitive" } }
+            ];
+        }
+
+        if (parentIdQuery !== undefined && parentIdQuery !== "all" && parentIdQuery !== "") {
+            if (parentIdQuery === "null" || parentIdQuery === "root") {
                 whereClause.parentId = null;
             } else if (/^\d+$/.test(parentIdQuery)) {
                 whereClause.parentId = BigInt(parentIdQuery);
@@ -44,7 +60,8 @@ export const getCategories = async (req: Request, res: Response) => {
             orderBy: { name: "asc" },
             include: {
                 parent: true,
-                children: true
+                children: true,
+                _count: { select: { products: true } }
             }
         });
 
@@ -59,6 +76,7 @@ export const getCategories = async (req: Request, res: Response) => {
         });
     }
 };
+
 
 export const getCategoryByIdOrSlug = async (req: Request, res: Response) => {
     try {
