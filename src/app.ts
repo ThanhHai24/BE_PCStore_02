@@ -9,6 +9,7 @@ import uploadRoutes from "./routes/upload.routes";
 import paymentRoutes from "./routes/payment.routes";
 import brandRoutes from "./routes/brand.routes";
 import userRoutes from "./routes/user.routes";
+import reviewRoutes from "./routes/review.routes";
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 
 
