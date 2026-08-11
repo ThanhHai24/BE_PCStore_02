@@ -59,6 +59,12 @@ enum ReviewStatus {
   REJECTED
 }
 
+enum QnaStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum CouponType {
   PERCENT
   FIXED
@@ -88,6 +94,7 @@ model User {
   cart                 Cart?
   orders               Order[]
   reviews              Review[]
+  questions            Question[]
   couponUsages         CouponUsage[]
   builds               PcBuild[]
   orderStatusHistories OrderStatusHistory[]
@@ -209,6 +216,7 @@ model Product {
   cartItems    CartItem[]
   orderItems   OrderItem[]
   reviews      Review[]
+  questions    Question[]
   pcBuildItems PcBuildItem[]
 
   createdAt DateTime @default(now())
@@ -608,3 +616,40 @@ model PcBuildItem {
   @@index([productId])
   @@map("pc_build_items")
 }
+
+// ======================================================
+// 19. QUESTION / QNA (HỎI ĐÁP SẢN PHẨM)
+// ======================================================
+
+model Question {
+  id BigInt @id @default(autoincrement())
+
+  productId BigInt
+  userId    BigInt?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  customerName  String  @db.VarChar(150)
+  customerPhone String? @db.VarChar(20)
+  customerEmail String? @db.VarChar(150)
+
+  content String @db.Text
+
+  answer       String?   @db.Text
+  answeredById BigInt?
+  answeredAt   DateTime?
+
+  isAnswered Boolean   @default(false)
+  status     QnaStatus @default(APPROVED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([userId])
+  @@index([status])
+  @@index([isAnswered])
+  @@map("questions")
+}
+
