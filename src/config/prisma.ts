@@ -18,6 +18,7 @@ pool.on("error", (err) => {
 
 const adapter = new PrismaPg(pool);
 
+// Initialize Prisma Client with pg adapter
 const prisma = new PrismaClient({
   adapter,
 });

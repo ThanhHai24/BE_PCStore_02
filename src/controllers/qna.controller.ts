@@ -21,7 +21,25 @@ export const getQuestionsByProduct = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Product ID is required" });
         }
 
-        const pId = BigInt(productIdStr);
+        const isNumeric = /^\d+$/.test(productIdStr);
+        const product = await prisma.product.findFirst({
+            where: isNumeric ? { id: BigInt(productIdStr) } : { slug: productIdStr },
+            select: { id: true }
+        });
+
+        if (!product) {
+            return res.status(200).json({
+                questions: [],
+                pagination: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 1
+                }
+            });
+        }
+
+        const pId = product.id;
 
         const [questions, total] = await Promise.all([
             prisma.question.findMany({
@@ -81,16 +99,17 @@ export const createQuestion = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Content is required" });
         }
 
-        const pId = BigInt(productIdStr);
-
-        // Check if product exists
-        const product = await prisma.product.findUnique({
-            where: { id: pId }
+        const isNumeric = /^\d+$/.test(productIdStr);
+        const product = await prisma.product.findFirst({
+            where: isNumeric ? { id: BigInt(productIdStr) } : { slug: productIdStr },
+            select: { id: true }
         });
 
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
+
+        const pId = product.id;
 
         let name = customerName;
         let phone = customerPhone || null;
