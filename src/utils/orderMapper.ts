@@ -43,6 +43,7 @@ export interface OrderResponse {
     code: string;
     userId: string | null;
     customerName: string;
+    customerEmail?: string | null;
     customerPhone: string;
     shippingAddress: string;
     subtotal: number;
@@ -128,6 +129,7 @@ export const formatOrderResponse = (
         code: order.code,
         userId: order.userId ? order.userId.toString() : null,
         customerName: order.customerName,
+        customerEmail: order.customerEmail || null,
         customerPhone: order.customerPhone,
         shippingAddress: order.shippingAddress,
         subtotal: order.subtotal,

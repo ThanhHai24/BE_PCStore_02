@@ -3,6 +3,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { formatOrderResponse } from "../utils/orderMapper";
+import { sendOrderConfirmationEmail } from "../services/email.service";
 
 /**
  * Create a new order (Supports guest and authenticated users)
@@ -11,6 +12,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     try {
         const {
             customerName,
+            customerEmail,
+            email,
             customerPhone,
             shippingAddress,
             paymentMethod = "COD",
@@ -19,6 +22,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             shippingFee = 0,
             items: reqItems
         } = req.body;
+
+        const finalCustomerEmail = (customerEmail || email || "").trim() || null;
 
         // Validation
         if (!customerName || !customerPhone || !shippingAddress) {
@@ -206,8 +211,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
             const newOrder = await tx.order.create({
                 data: {
                     code: orderCode,
-                    userId,
+                    ...(userId ? { user: { connect: { id: userId } } } : {}),
                     customerName,
+                    customerEmail: finalCustomerEmail,
                     customerPhone,
                     shippingAddress,
                     subtotal,
@@ -240,7 +246,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
                         create: {
                             status: OrderStatus.PENDING,
                             notes: "Order created successfully",
-                            changedById: userId
+                            ...(userId ? { changedBy: { connect: { id: userId } } } : {})
                         }
                     }
                 },
@@ -298,6 +304,33 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
             return newOrder;
         });
+
+        // Trigger async order confirmation email dispatch
+        const targetEmail = finalCustomerEmail || result.user?.email || null;
+        if (targetEmail) {
+            sendOrderConfirmationEmail({
+                toEmail: targetEmail,
+                orderCode: result.code,
+                customerName: result.customerName,
+                customerPhone: result.customerPhone,
+                shippingAddress: result.shippingAddress,
+                paymentMethod: result.paymentMethod,
+                subtotal: result.subtotal,
+                shippingFee: result.shippingFee,
+                discountAmount: result.discountAmount,
+                totalAmount: result.totalAmount,
+                createdAt: result.createdAt,
+                items: result.items.map(item => ({
+                    productName: item.productName,
+                    quantity: item.quantity,
+                    price: item.price
+                }))
+            }).catch(err => {
+                console.error("Async Order Email Error:", err);
+            });
+        } else {
+            console.log(`ℹ️ Order #${result.code} created without customer email address.`);
+        }
 
         return res.status(201).json({
             message: "Order placed successfully",

@@ -288,9 +288,10 @@ model Order {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   // Thông tin người nhận
-  customerName    String @db.VarChar(150)
-  customerPhone   String @db.VarChar(20)
-  shippingAddress String @db.VarChar(500)
+  customerName    String  @db.VarChar(150)
+  customerEmail   String? @db.VarChar(150)
+  customerPhone   String  @db.VarChar(20)
+  shippingAddress String  @db.VarChar(500)
 
   // Giá
   subtotal       Int

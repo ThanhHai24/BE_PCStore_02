@@ -69,7 +69,7 @@ export const getReviewsByProduct = async (req: AuthRequest, res: Response) => {
           productId: numericProdId,
           order: {
             userId: { in: userIds },
-            status: { in: ["DELIVERED", "SHIPPED", "CONFIRMED", "PROCESSING"] }
+            status: "DELIVERED"
           }
         },
         select: {
@@ -117,8 +117,14 @@ export const getReviewsByProduct = async (req: AuthRequest, res: Response) => {
       return { star, count, percentage };
     });
 
+    let userHasPurchased = false;
+    if (req.user?.userId) {
+      userHasPurchased = purchasedUserIds.has(req.user.userId.toString());
+    }
+
     return res.json({
       productId: numericProdId.toString(),
+      userHasPurchased,
       summary: {
         totalReviews,
         avgRating,
@@ -164,6 +170,23 @@ export const createReview = async (req: AuthRequest, res: Response) => {
     const numericProdId = product.id;
     const numericUserId = BigInt(currentUserId);
 
+    // Verify user has purchased this product and order status is DELIVERED
+    const orderItem = await prisma.orderItem.findFirst({
+      where: {
+        productId: numericProdId,
+        order: {
+          userId: numericUserId,
+          status: "DELIVERED"
+        }
+      }
+    });
+
+    if (!orderItem) {
+      return res.status(403).json({
+        message: "Bạn chỉ có thể viết đánh giá sau khi đơn hàng đã hoàn thành (Giao hàng thành công)."
+      });
+    }
+
     // Upsert review (user can review a product once or update existing review)
     const existingReview = await prisma.review.findUnique({
       where: {
@@ -207,17 +230,6 @@ export const createReview = async (req: AuthRequest, res: Response) => {
         }
       });
     }
-
-    // Check if user has purchased this product
-    const orderItem = await prisma.orderItem.findFirst({
-      where: {
-        productId: numericProdId,
-        order: {
-          userId: numericUserId,
-          status: { in: ["DELIVERED", "SHIPPED", "CONFIRMED", "PROCESSING"] }
-        }
-      }
-    });
 
     const formattedReview: ReviewResponse = {
       id: review.id.toString(),
