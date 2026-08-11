@@ -41,6 +41,7 @@ export interface ProductResponse {
     brandId: string;
     rating?: number;
     reviewCount?: number;
+    soldCount?: number;
     category?: CategoryResponse;
     brand?: BrandResponse;
     createdAt: Date;
@@ -72,7 +73,8 @@ export const formatBrandResponse = (brand: Brand): BrandResponse => {
 };
 
 export const formatProductResponse = (
-    product: Product & { category?: Category; brand?: Brand; rating?: number; reviewCount?: number }
+    product: Product & { category?: Category; brand?: Brand; rating?: number; reviewCount?: number; soldCount?: number },
+    extraSoldCount?: number
 ): ProductResponse => {
     return {
         id: product.id.toString(),
@@ -93,6 +95,7 @@ export const formatProductResponse = (
         viewCount: product.viewCount,
         rating: product.rating ?? 0,
         reviewCount: product.reviewCount ?? 0,
+        soldCount: extraSoldCount !== undefined ? extraSoldCount : (product.soldCount ?? 0),
         categoryId: product.categoryId.toString(),
         brandId: product.brandId.toString(),
         category: product.category ? formatCategoryResponse(product.category) : undefined,

@@ -96,8 +96,28 @@ export const getProducts = async (req: Request, res: Response) => {
             })
         ]);
 
+        const productIds = products.map((p) => p.id);
+        const soldMap = new Map<string, number>();
+        if (productIds.length > 0) {
+            try {
+                const soldItems = await prisma.orderItem.groupBy({
+                    by: ['productId'],
+                    where: {
+                        productId: { in: productIds },
+                        order: { status: { not: 'CANCELLED' } }
+                    },
+                    _sum: { quantity: true }
+                });
+                soldItems.forEach((item) => {
+                    soldMap.set(item.productId.toString(), item._sum.quantity || 0);
+                });
+            } catch (sumErr) {
+                console.warn("Failed to calculate sold quantities:", sumErr);
+            }
+        }
+
         return res.json({
-            products: products.map(formatProductResponse),
+            products: products.map((p) => formatProductResponse(p, soldMap.get(p.id.toString()) || 0)),
             pagination: {
                 total,
                 page,
@@ -131,8 +151,28 @@ export const getFeaturedProducts = async (req: Request, res: Response) => {
             }
         });
 
+        const productIds = products.map((p) => p.id);
+        const soldMap = new Map<string, number>();
+        if (productIds.length > 0) {
+            try {
+                const soldItems = await prisma.orderItem.groupBy({
+                    by: ['productId'],
+                    where: {
+                        productId: { in: productIds },
+                        order: { status: { not: 'CANCELLED' } }
+                    },
+                    _sum: { quantity: true }
+                });
+                soldItems.forEach((item) => {
+                    soldMap.set(item.productId.toString(), item._sum.quantity || 0);
+                });
+            } catch (sumErr) {
+                console.warn("Failed to calculate sold quantities for featured:", sumErr);
+            }
+        }
+
         return res.json({
-            products: products.map(formatProductResponse)
+            products: products.map((p) => formatProductResponse(p, soldMap.get(p.id.toString()) || 0))
         });
 
     } catch (error) {
@@ -176,11 +216,25 @@ export const getProductByIdOrSlug = async (req: Request, res: Response) => {
             data: { viewCount: { increment: 1 } }
         });
 
+        let soldCount = 0;
+        try {
+            const soldAgg = await prisma.orderItem.aggregate({
+                where: {
+                    productId: product.id,
+                    order: { status: { not: 'CANCELLED' } }
+                },
+                _sum: { quantity: true }
+            });
+            soldCount = soldAgg._sum.quantity || 0;
+        } catch (sumErr) {
+            console.warn("Failed to calculate sold quantity for product detail:", sumErr);
+        }
+
         return res.json({
             product: formatProductResponse({
                 ...product,
                 viewCount: product.viewCount + 1
-            })
+            }, soldCount)
         });
 
     } catch (error) {

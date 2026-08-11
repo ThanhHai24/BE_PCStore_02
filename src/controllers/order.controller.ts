@@ -252,14 +252,20 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
                 }
             });
 
-            // 2. Decrement product stock
+            // 2. Decrement product stock & update status if out of stock
             for (const item of orderItemsToCreate) {
-                await tx.product.update({
+                const updatedProduct = await tx.product.update({
                     where: { id: item.productId },
                     data: {
                         stock: { decrement: item.quantity }
                     }
                 });
+                if (updatedProduct.stock <= 0 && updatedProduct.status === "ACTIVE") {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: { status: "OUT_OF_STOCK" }
+                    });
+                }
             }
 
             // 3. Update coupon usage if applied
@@ -476,14 +482,20 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
                 }
             });
 
-            // 2. Restore product stock
+            // 2. Restore product stock & reactive product status if previously out of stock
             for (const item of order.items) {
-                await tx.product.update({
+                const updatedProduct = await tx.product.update({
                     where: { id: item.productId },
                     data: {
                         stock: { increment: item.quantity }
                     }
                 });
+                if (updatedProduct.stock > 0 && updatedProduct.status === "OUT_OF_STOCK") {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: { status: "ACTIVE" }
+                    });
+                }
             }
 
             return updated;
@@ -663,23 +675,35 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
             });
 
             // 2. Stock handling:
-            // Changing TO CANCELLED from active status -> Restore product stock
+            // Changing TO CANCELLED from active status -> Restore product stock & activate status
             if (normalizedStatus === OrderStatus.CANCELLED && (previousStatus as string) !== "CANCELLED") {
                 for (const item of order.items) {
-                    await tx.product.update({
+                    const updatedProduct = await tx.product.update({
                         where: { id: item.productId },
                         data: { stock: { increment: item.quantity } }
                     });
+                    if (updatedProduct.stock > 0 && updatedProduct.status === "OUT_OF_STOCK") {
+                        await tx.product.update({
+                            where: { id: item.productId },
+                            data: { status: "ACTIVE" }
+                        });
+                    }
                 }
             }
 
             // Changing FROM CANCELLED to active status -> Deduct product stock
             if ((previousStatus as string) === "CANCELLED" && normalizedStatus !== OrderStatus.CANCELLED) {
                 for (const item of order.items) {
-                    await tx.product.update({
+                    const updatedProduct = await tx.product.update({
                         where: { id: item.productId },
                         data: { stock: { decrement: item.quantity } }
                     });
+                    if (updatedProduct.stock <= 0 && updatedProduct.status === "ACTIVE") {
+                        await tx.product.update({
+                            where: { id: item.productId },
+                            data: { status: "OUT_OF_STOCK" }
+                        });
+                    }
                 }
             }
 
